@@ -462,9 +462,9 @@ class WebServer:
             for b in big_boxes:
                 x1, y1, x2, y2 = int(b[0]), int(b[1]), int(b[2]), int(b[3])
                 self._draw_dashed_rect(frame, (x1, y1), (x2, y2),
-                                       (0, 255, 255), thickness=3, dash_len=12, gap=6)
+                                       (0, 255, 0), thickness=3, dash_len=12, gap=6)
                 cv2.putText(frame, "绝缘子串", (x1, max(10, y1 - 8)),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
             # 画小框 (独立绝缘子)
             for d in dets:

@@ -17,7 +17,7 @@ OV13855 摄像头 → RKNN NPU 推理 (3分类) → Qt 触屏实时显示
 
 | ID | 英文名 | 中文名 | 框颜色 | 说明 |
 |:--:|--------|--------|--------|------|
-| 0 | Nora1 | 正常 | 🟢 绿色 | 绝缘子状态正常，无破损 |
+| 0 | Normal | 正常 | 🟢 绿色 | 绝缘子状态正常，无破损 |
 | 1 | JYZ | 绝缘子 | 🔵 蓝色 | 绝缘子检测目标（非缺陷类） |
 | 2 | Broken | 破损 | 🔴 红色 | 绝缘子本体破损 / 裂纹 / 缺陷 |
 
@@ -35,6 +35,98 @@ OV13855 摄像头 → RKNN NPU 推理 (3分类) → Qt 触屏实时显示
 | 摄像头 | OV13855 MIPI-CSI (`/dev/video11`, rkisp_mainpath) |
 | 触摸屏 | 7 英寸 MIPI LCD (1024×600, Wayland) |
 | 无线 | CF-AX200-M (WiFi / 蓝牙) |
+
+---
+
+## 数据集说明
+
+### 数据来源
+
+数据集为自建绝缘子标注数据集，包含正常光照与低光照场景两类图像共 **900 张**，标注实例 **7120 个**。原始标注包含 4 个类别，经类别重映射后统一为三分类体系。
+
+### 类别定义
+
+| 类别 ID | 名称 | 说明 |
+|:-------:|------|------|
+| 0 | Normal | 正常绝缘子片 |
+| 1 | JYZ | 整串绝缘子 |
+| 2 | Broken | 破损绝缘子（含 class 3 重映射合并） |
+
+### 数据集处理
+
+原始数据中存在 class 3（细粒度缺陷类别），通过 `prepare_improved_dataset.py` 将 class 3 **重映射至 class 2（Broken）**，使破损类标注从 409 个扩充至 649 个。
+
+训练/验证/测试集按 **7:1.5:1.5** 比例随机划分。
+
+### 离线数据增强
+
+为提升模型在恶劣环境下的鲁棒性，对 **30%** 的训练图像进行离线增强，共生成 **414 张**增强样本：
+
+| 增强类型 | 方法 | 参数 | 数量 |
+|---------|------|------|:--:|
+| 暗光模拟 (DARK) | 线性亮度衰减 + 高斯噪声 | 亮度因子 0.3~0.6，噪声 σ 5~15 | 180 |
+| 雾霾模拟 (FOG) | 大气散射模型 | 雾气强度 0.3~0.7，大气光 0.85~1.0 | 180 |
+| 极端暗光 (VDARK) | 暗光叠加 50% 二次衰减 | 最终亮度 15%~30% | 54 |
+
+增强后的最终训练集共 **1044 张**，验证集 135 张，测试集 135 张。
+
+### 在线数据增强（训练时）
+
+| 策略 | 参数 |
+|------|------|
+| HSV 饱和度抖动 | 0.7 |
+| HSV 明度抖动 | 0.5 |
+| Mosaic | 100%（最后 15 轮关闭） |
+| MixUp | 20% |
+| Copy-Paste | 10% |
+| 随机缩放 | 0.5 |
+| 水平翻转 | 50% |
+| 标签平滑 | 0.1 |
+
+---
+
+## 完整工作流
+
+### 第一阶段：训练（PC）
+
+```bash
+cd project/train
+
+# 1. 准备改进数据集（含暗光/雾霾增强）
+python3 prepare_improved_dataset.py
+
+# 2. YOLOv8n 训练
+python3 train_improved.py --epochs 100 --batch 8
+```
+
+### 训练结果
+
+| 指标 | 值 |
+|------|-----|
+| mAP@50 | 99.43% |
+| mAP@50-95 | 75.31% |
+| 精确率 (P) | 99.60% |
+| 召回率 (R) | 99.09% |
+| 模型体积 | 6.0 MB (.pt) |
+| 训练耗时 | ~13.8h (AMD Ryzen 5 5600G CPU) |
+
+### 第二阶段：模型转换（PC）
+
+```bash
+cd project/convert
+python3 export_onnx.py --weights ../train/runs/improved_train/insulator_v3/weights/best.pt --imgsz 640
+python3 build_rknn.py --onnx best.onnx --output model.rknn
+```
+
+### 第三阶段：板端部署
+
+```bash
+# 拷贝 model.rknn 到板端
+scp model.rknn elf@<板端IP>:/home/elf/RK3588/project/
+
+# 板端运行
+python3 main.py
+```
 
 ---
 
@@ -69,10 +161,6 @@ python3 main.py --conf 0.15 --record
 # 启用 LLM 核验 + Web 仪表盘
 export ZHIPU_API_KEY="xxx.xxx"
 python3 main.py --verify-api zhipu --web
-
-# 使用 DeepSeek 核验
-export DEEPSEEK_API_KEY="sk-xxx"
-python3 main.py --verify-api deepseek --web
 
 # 测试模式: 从文件夹随机抽取 5 张图片进行检测和核验 (不走摄像头)
 python3 main.py --test-dir /path/to/images --verify-api zhipu
@@ -159,16 +247,7 @@ API Key 获取：https://open.bigmodel.cn （免费注册）
 
 核验有 90 秒超时保护，超时自动释放。
 
-### 4. 大框分离逻辑
-
-模型偶尔会检出一个包住整串绝缘子的大包围框。系统会自动识别这种大框并分离处理：
-
-- **大框**：在画面中以黄色虚线绘制，标注"绝缘子串"，仅用于可视化
-- **小框**（独立绝缘子）：正常参与核验、统计、记录
-
-识别条件：框面积 > 4 倍中位面积，且包含至少 2 个其他框的中心点。
-
-### 5. 数据记录
+### 4. 数据记录
 
 | 类型 | 保存路径 | 触发方式 |
 |------|---------|----------|
@@ -206,64 +285,37 @@ API Key 获取：https://open.bigmodel.cn （免费注册）
 
 ```
 project/
-├── main.py                    # 系统主入口 (Qt 界面 + NPU 推理 + LLM 核验 + 数据记录)
-├── web_server.py              # Web 仪表盘 (Flask, MJPEG 推流 + 历史结果 API)
-├── requirements.txt           # Python 依赖清单
-├── README.md                  # 本文件
+├── main.py                          # 系统主入口 (Qt 界面 + NPU 推理 + LLM 核验 + 数据记录)
+├── web_server.py                    # Web 仪表盘 (Flask, MJPEG 推流 + 历史结果 API)
+├── requirements.txt                 # Python 依赖清单
+├── README.md                        # 本文件
 │
-├── train/                     # 训练模块 (PC 端)
-│   ├── prepare_dataset.py     #   数据集准备
-│   ├── train_yolo.py          #   YOLO 模型训练
-│   ├── extract_metrics.py     #   提取评估指标
-│   ├── mine_hard_examples.py  #   难例挖掘
-│   └── data_quality_check.py  #   数据质量检查
+├── train/                           # 训练模块 (PC 端)
+│   ├── dataset.yaml                 #   数据集配置模板
+│   ├── prepare_improved_dataset.py  #   改进数据集准备（含暗光/雾霾增强）
+│   ├── train_improved.py            #   YOLOv8n 改进训练（含增强策略）
+│   ├── prepare_dataset.py           #   基础数据集准备
+│   ├── train_yolo.py                #   基础 YOLO 训练
+│   ├── extract_metrics.py           #   提取评估指标
+│   ├── mine_hard_examples.py        #   难例挖掘
+│   └── data_quality_check.py        #   数据质量检查
 │
-├── convert/                   # 模型转换模块 (PC 端)
-│   ├── export_onnx.py         #   PyTorch → ONNX
-│   ├── build_rknn.py          #   ONNX → RKNN
-│   ├── compare_onnx_rknn.py   #   ONNX vs RKNN 精度对比
-│   └── make_calib_list.py     #   生成量化校准列表
+├── convert/                         # 模型转换模块 (PC 端)
+│   ├── export_onnx.py               #   PyTorch → ONNX
+│   ├── build_rknn.py                #   ONNX → RKNN
+│   ├── compare_onnx_rknn.py         #   ONNX vs RKNN 精度对比
+│   └── make_calib_list.py           #   生成量化校准列表
 │
-├── deploy/                    # 部署辅助脚本 (PC/板端)
-│   ├── inference_display.py   #   OpenCV 桌面推理显示
-│   ├── verify_board.py        #   板端环境验证
-│   ├── tune_thresholds.py     #   阈值调优
-│   ├── mvp_display.py         #   MVP 简易显示
-│   └── realtime_simulator.py  #   实时模拟器
+├── deploy/                          # 部署辅助脚本 (PC/板端)
+│   ├── inference_display.py         #   OpenCV 桌面推理显示
+│   ├── verify_board.py              #   板端环境验证
+│   ├── tune_thresholds.py           #   阈值调优
+│   ├── mvp_display.py               #   MVP 简易显示
+│   └── realtime_simulator.py        #   实时模拟器
 │
-└── tools/                     # 工具脚本
-    ├── pack_for_cloud.py      #   云端打包
-    └── pack_elf2_for_cloud.py #   ELF2 云端打包
-```
-
----
-
-## 完整工作流
-
-### 第一阶段：训练（PC）
-
-```bash
-cd project/train
-python3 prepare_dataset.py --image-root /path/to/images --annotation-json /path/to/annotations.json
-python3 train_yolo.py train --data ../data/yolo_dataset/dataset.yaml --model yolov8n.pt --epochs 100
-```
-
-### 第二阶段：模型转换（PC）
-
-```bash
-cd project/convert
-python3 export_onnx.py --weights ../train/runs/detect/train/weights/best.pt --imgsz 640
-python3 build_rknn.py --onnx best.onnx --output model.rknn
-```
-
-### 第三阶段：板端部署
-
-```bash
-# 拷贝 model.rknn 到板端
-scp model.rknn elf@<板端IP>:/home/elf/RK3588/project/
-
-# 板端运行
-python3 main.py
+└── tools/                           # 工具脚本
+    ├── pack_for_cloud.py            #   云端打包
+    └── pack_elf2_for_cloud.py       #   ELF2 云端打包
 ```
 
 ---

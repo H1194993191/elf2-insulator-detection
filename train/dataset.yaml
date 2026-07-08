@@ -1,0 +1,13 @@
+# ELF 绝缘子检测 - 改进数据集
+# 包含原图 + 暗光模拟 + 雾霾模拟增强
+path: .
+train: images/train
+val: images/val
+test: images/test
+
+# Classes
+nc: 3
+names:
+  0: Normal
+  1: JYZ
+  2: Broken
