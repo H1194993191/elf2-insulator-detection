@@ -9,7 +9,7 @@ ELF2 绝缘子缺陷检测系统 (单文件版)
   - RKNN NPU 推理 (5分类: 正常/破损/污秽/闪络痕迹/异物)
   - Qt 触屏界面 (1024x600, Wayland)
   - 自动截图 / 录像 / 事件日志
-  - 检测到缺陷自动触发 LLM 核验 (DeepSeek / 智谱 GLM-4V)
+  - 检测到绝缘子自动触发 LLM 核验 (智谱 GLM-4V)
   - 核验完成自动保存报告 (JSON)
   - 历史记录列表, 点击查看详情
 
@@ -321,10 +321,9 @@ class RKNNDetector:
 # LLM 智能核验
 # ============================================================
 class LLMVerifier:
-    """大模型核验: DeepSeek / 智谱 GLM-4V"""
+    """大模型核验: 智谱 GLM-4V 多模态视觉核验"""
 
-    def __init__(self, api_type: str = "deepseek"):
-        self.api_type = api_type
+    def __init__(self):
         self._config: Dict[str, str] = {}
         self._enabled = False
 
@@ -487,9 +486,6 @@ class LLMVerifier:
             "temperature": 0.3,
             "max_tokens": 2048,
         }
-        # DeepSeek 支持 response_format
-        if "deepseek" in self._config.get("api_url", ""):
-            payload["response_format"] = {"type": "json_object"}
 
         resp = requests.post(self._config["api_url"], headers=headers,
                              json=payload, timeout=(10, 60))
@@ -911,16 +907,9 @@ class MainWindow(QMainWindow):
         api = self.args.verify_api
         if not api:
             return
-        self.verifier = LLMVerifier(api_type=api)
-        if api == "deepseek":
-            key = os.environ.get("DEEPSEEK_API_KEY", "")
-            self.verifier.configure(
-                api_key=key,
-                api_url="https://api.deepseek.com/v1/chat/completions",
-                model="deepseek-chat")
-        elif api == "zhipu":
-            # 智谱 GLM-4V API Key (硬编码, 无需环境变量)
-            key = os.environ.get("ZHIPU_API_KEY", "633fd2c45bcc48deb1654ae4bbacdad8.a6D9Lu8XxpuoOMqD")
+        self.verifier = LLMVerifier()
+        if api == "zhipu":
+            key = os.environ.get("ZHIPU_API_KEY", "")
             self.verifier.configure(
                 api_key=key,
                 api_url="https://open.bigmodel.cn/api/paas/v4/chat/completions",
@@ -1758,8 +1747,8 @@ def parse_args():
                    help="最小检测框面积(像素), 过滤过小误检, 默认8000, 0表示关闭")
     p.add_argument("--record", action="store_true", help="启动录像")
     p.add_argument("--output-dir", default="records")
-    p.add_argument("--verify-api", choices=["deepseek", "zhipu", ""], default="",
-                   help="LLM 核验 API (需设置对应环境变量)")
+    p.add_argument("--verify-api", choices=["zhipu", ""], default="",
+                   help="LLM 核验 API: zhipu (需设置 ZHIPU_API_KEY 环境变量)")
     p.add_argument("--web", action="store_true",
                    help="启动 Web 仪表盘 (PC 浏览器访问 http://<板端IP>:5000)")
     p.add_argument("--web-port", type=int, default=5000,

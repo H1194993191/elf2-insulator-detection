@@ -138,12 +138,9 @@ API 接口：
 
 | API | 模型 | 方式 | 环境变量 |
 |-----|------|------|----------|
-| DeepSeek | `deepseek-chat` | 文本分析（图像特征 + 检测框信息） | `DEEPSEEK_API_KEY` |
 | 智谱 GLM-4V | `glm-4v` | 多模态视觉核验（直接分析图片） | `ZHIPU_API_KEY` |
 
-API Key 获取：
-- DeepSeek: https://platform.deepseek.com （免费注册）
-- 智谱: https://open.bigmodel.cn （免费注册）
+API Key 获取：https://open.bigmodel.cn （免费注册）
 
 核验返回结构化 JSON：
 
@@ -198,7 +195,7 @@ API Key 获取：
 | `--min-area` | `8000` | 最小检测框面积（像素），过滤过小误检，0 表示关闭 |
 | `--record` | `False` | 启动时自动开始录像 |
 | `--output-dir` | `records` | 截图/录像/报告输出目录 |
-| `--verify-api` | (空) | LLM 核验 API: `deepseek` 或 `zhipu` |
+| `--verify-api` | (空) | LLM 核验 API: `zhipu` |
 | `--web` | `False` | 启动 Web 仪表盘 |
 | `--web-port` | `5000` | Web 仪表盘端口号 |
 | `--test-dir` | (空) | 测试模式：从此目录随机抽取 5 张图片检测核验，不走摄像头 |
@@ -325,15 +322,11 @@ python3 main.py --min-area 12000
 
 确认 API Key 已设置：
 ```bash
-echo $DEEPSEEK_API_KEY
 echo $ZHIPU_API_KEY
 ```
 
 如果为空，先注册获取 Key，然后：
 ```bash
-export DEEPSEEK_API_KEY="sk-xxx"
-python3 main.py --verify-api deepseek
-# 或
 export ZHIPU_API_KEY="xxx.xxx"
 python3 main.py --verify-api zhipu
 ```
