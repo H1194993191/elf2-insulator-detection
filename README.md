@@ -2,6 +2,8 @@
 
 > 基于 **瑞芯微 RK3588** 的边缘计算绝缘子缺陷检测与智能核验系统
 
+📹 **项目演示视频**：[百度网盘](https://pan.baidu.com/s/15_9KWrMVy7sBh2JlCF4EYQ?pwd=pfz4) (提取码: pfz4)
+
 ---
 
 ## 项目概览

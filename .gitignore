@@ -38,3 +38,9 @@ output/
 
 # Thumbs.db (Windows)
 Thumbs.db
+
+# 视频/大型媒体文件
+*.mp4
+*.avi
+*.mov
+*.mkv
