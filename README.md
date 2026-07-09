@@ -170,6 +170,25 @@ Web 仪表盘启动后，PC 浏览器访问：
 - 实时监控：`http://<板端IP>:5000`
 - 核验结果：`http://<板端IP>:5000/results`
 
+### 批量测试 & 图表报告
+
+```bash
+# 对指定目录下所有图片进行 NPU 推理 + GLM-4V 核验，输出 6 张评估图表
+export ZHIPU_API_KEY="xxx.xxx"
+python3 test_all_images.py --image-dir /path/to/images --model model.rknn --verify-api zhipu
+
+# PC 端仅从已有 summary.json 生成图表（板端已跑过推理）
+python3 test_all_images.py --image-dir /path/to/images --charts-only
+```
+
+输出目录 `_test_results/` 包含：
+- `01_confidence_distribution.png` — 三类目标置信度分布
+- `02_class_counts.png` — 检测数量统计
+- `03_verification_pie.png` — LLM 核验饼图
+- `04_severity_distribution.png` — 缺陷严重程度分布
+- `05_detections_per_image.png` — 分场景鲁棒性对比
+- `06_timing_stats.png` — NPU/LLM 推理耗时
+
 ---
 
 ## 功能说明
@@ -287,6 +306,7 @@ API Key 获取：https://open.bigmodel.cn （免费注册）
 project/
 ├── main.py                          # 系统主入口 (Qt 界面 + NPU 推理 + LLM 核验 + 数据记录)
 ├── web_server.py                    # Web 仪表盘 (Flask, MJPEG 推流 + 历史结果 API)
+├── test_all_images.py               # 批量测试脚本 (全量数据集推理 + LLM 核验 + 6图报告)
 ├── requirements.txt                 # Python 依赖清单
 ├── README.md                        # 本文件
 │

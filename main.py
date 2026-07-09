@@ -746,8 +746,10 @@ class DetectThread(QThread):
         exts = ["*.jpg", "*.jpeg", "*.png", "*.bmp"]
         images = []
         for ext in exts:
-            images.extend(glob.glob(os.path.join(test_dir, ext)))
-            images.extend(glob.glob(os.path.join(test_dir, ext.upper())))
+            images.extend(glob.glob(os.path.join(test_dir, "**", ext), recursive=True))
+            images.extend(glob.glob(os.path.join(test_dir, "**", ext.upper()), recursive=True))
+        # 排除 _test_results 等结果目录中的图片
+        images = [p for p in images if "_test_results" not in p and "_results" not in p]
         if not images:
             self.status_update.emit(f"测试目录无图片: {test_dir}")
             return
